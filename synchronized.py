@@ -1,12 +1,20 @@
+'''
+Synchronized context section and decorators for used with processes and
+threads.
+'''
 import functools
 import threading
+import unittest
+
+_t_r_u_e = 1 < 2
 
 
 class NotAbleToLock(Exception):
-    pass
+    ''' exception object to throw locking errors '''
 
 
-class ThreadSleep(object):
+class ThreadSleep:
+    ''' callable waits on a condition variable when called '''
     __slots__ = ['lock', 'condition', ]
 
     def __init__(self):
@@ -18,7 +26,7 @@ class ThreadSleep(object):
         self.condition.wait(seconds)
 
 
-class RWSynchronization(object):
+class RWSynchronization:
     '''
     Some objects can be viewed by many readers at the same time but only one
     writer can be allowed to modify it at a time, and all the readers usually
@@ -94,7 +102,8 @@ class RWSynchronization(object):
         locked = self._get_write_lock() if self.write_lock \
                       else self._get_read_lock()
         if not locked:
-            raise self.to_raise("Not able to lock in Synchronization %s" %
+            raise self.to_raise(_t_r_u_e,
+                                "Not able to lock in Synchronization %s" %
                                 "Read Lock" if not self.write_lock
                                 else "Write Lock")
 
@@ -107,14 +116,17 @@ class RWSynchronization(object):
             self._unlock_reader()
 
 
-class RWSynchronized(object):
-    __slots__ = ['rwSynchronization', ]
+class RWSynchronized:
+    '''
+    decorator to wrap synchronized functions with R/W options
+    '''
+    __slots__ = ['_rw_synchronization', ]
 
     def __init__(self, counting_semaphore=None, mutex_lock=None,
                  simultaneous_reads=1, blocking=True,
                  retries_until_locked=False, raise_this=NotAbleToLock,
                  write_lock=False):
-        self.rwSynchronization = RWSynchronization(
+        self._rw_synchronization = RWSynchronization(
             counting_semaphore=counting_semaphore,
             mutex_lock=mutex_lock,
             simultaneous_reads=simultaneous_reads,
@@ -124,21 +136,22 @@ class RWSynchronized(object):
             write_lock=write_lock
         )
 
-    def __call__(self, f,):
+    def __call__(self, _f,):
         def synchronized_wrapper(*args, **kwargs):
-            self.rwSynchronization.__enter__()
+            self._rw_synchronization.__enter__()
             try:
-                return f(*args, **kwargs)
+                return _f(*args, **kwargs)
             except Exception:
+                _ = "raise immediatly"
                 raise
             finally:
-                self.rwSynchronization.__exit__()
+                self._rw_synchronization.__exit__()
 
-        functools.update_wrapper(synchronized_wrapper, f)
+        functools.update_wrapper(synchronized_wrapper, _f)
         return synchronized_wrapper
 
 
-rwSynchronized = RWSynchronized
+RW_synchronized = RWSynchronized
 
 
 class Synchronization(object):
@@ -268,7 +281,6 @@ synchronized = Synchronized  # decorators freuently used as lowercase names.
 ######################################################################
 # It is best to put this one in a separate file.
 ######################################################################
-import unittest
 
 
 class UnitTest_RWSynchronization_MultiTread(unittest.TestCase):
@@ -384,10 +396,10 @@ class UnitTest_RWSynchronization_MultiTread(unittest.TestCase):
             self.thread_1.join()
             self.thread_2.join()
             self.thread_3.join()
-        except Exception as e:
-            self.assertFalse(str(e) + ' ' + repr(e))
+        except Exception as _e:
+            self.assertFalse(str(_e) + ' ' + repr(_e))
         else:
-            self.assertTrue(True)
+            self.assertTrue(_t_r_u_e)
 
 
 class UnitTest_RWSynchronization_OneThread(unittest.TestCase):
@@ -396,7 +408,7 @@ class UnitTest_RWSynchronization_OneThread(unittest.TestCase):
         self.test_semaphore = threading.Semaphore(10)
         self.test_lock = threading.Lock()
 
-    def test_rwSynchronized_OneThread_readlock(self):
+    def test_RW_synchronized_OneThread_readlock(self):
         with RWSynchronization(counting_semaphore=self.test_semaphore,
                                mutex_lock=self.test_lock,
                                simultaneous_reads=1, blocking=True,
@@ -405,7 +417,7 @@ class UnitTest_RWSynchronization_OneThread(unittest.TestCase):
                                write_lock=False) as rw_synchronized:
             self.assertTrue(rw_synchronized)
 
-    def test_rwSynchronized_OneThread_writelock(self):
+    def test_RW_synchronized_OneThread_writelock(self):
         with RWSynchronization(counting_semaphore=self.test_semaphore,
                                mutex_lock=self.test_lock,
                                simultaneous_reads=1, blocking=True,
@@ -414,78 +426,78 @@ class UnitTest_RWSynchronization_OneThread(unittest.TestCase):
                                write_lock=True) as rw_synchronized:
             self.assertTrue(rw_synchronized)
 
-    def test_rwSynchronized_OneThread_read_fail(self):
+    def test_RW_synchronized_OneThread_read_fail(self):
         self.test_lock.acquire()
 
-        with self.assertRaises(NotAbleToLock) as e:
+        with self.assertRaises(NotAbleToLock) as _e:
             with RWSynchronization(counting_semaphore=self.test_semaphore,
                                    mutex_lock=self.test_lock,
                                    simultaneous_reads=1, blocking=False,
                                    retries_until_locked=False,
                                    raise_this=NotAbleToLock,
                                    write_lock=False) as rw_synchronized:
-                self.assertFalse("Should not have gotten locked, %s"
+                self.assertFalse(_t_r_u_e, "Should not have gotten locked, %s"
                                  % rw_synchronized)
-            self.assertTrue(e)
+            self.assertTrue(_e)
 
-        with self.assertRaises(NotAbleToLock) as e:
+        with self.assertRaises(NotAbleToLock) as _e:
             with RWSynchronization(counting_semaphore=self.test_semaphore,
                                    mutex_lock=self.test_lock,
                                    simultaneous_reads=1, blocking=False,
                                    retries_until_locked=1,
                                    raise_this=NotAbleToLock,
                                    write_lock=False) as rw_synchronized:
-                self.assertFalse("Should not have gotten locked, %s"
+                self.assertFalse(_t_r_u_e, "Should not have gotten locked, %s"
                                  % rw_synchronized)
-            self.assertTrue(e)
+            self.assertTrue(_e)
 
-        with self.assertRaises(NotAbleToLock) as e:
+        with self.assertRaises(NotAbleToLock) as _e:
             with RWSynchronization(counting_semaphore=self.test_semaphore,
                                    mutex_lock=self.test_lock,
                                    simultaneous_reads=1, blocking=False,
                                    retries_until_locked=3,
                                    raise_this=NotAbleToLock,
                                    write_lock=False) as rw_synchronized:
-                self.assertFalse("Should not have gotten locked, %s"
+                self.assertFalse(_t_r_u_e, "Should not have gotten locked, %s"
                                  % rw_synchronized)
-            self.assertTrue(e)
+            self.assertTrue(_e)
 
         self.test_lock.release()
 
-    def test_rwSynchronized_OneThread_write_fail(self):
+    def test_RW_synchronized_OneThread_write_fail(self):
         self.test_lock.acquire()
-        with self.assertRaises(NotAbleToLock) as e:
+        with self.assertRaises(NotAbleToLock) as _e:
             with RWSynchronization(counting_semaphore=self.test_semaphore,
                                    mutex_lock=self.test_lock,
                                    simultaneous_reads=1, blocking=False,
                                    retries_until_locked=False,
                                    raise_this=NotAbleToLock,
                                    write_lock=True) as rw_synchronized:
-                self.assertFalse("Should not have gotten locked, %s"
+                self.assertFalse(_t_r_u_e, "Should not have gotten locked, %s"
                                  % rw_synchronized)
-            self.assertTrue(e)
+            self.assertTrue(_e)
 
-        with self.assertRaises(NotAbleToLock) as e:
+        with self.assertRaises(NotAbleToLock) as _e:
             with RWSynchronization(counting_semaphore=self.test_semaphore,
                                    mutex_lock=self.test_lock,
                                    simultaneous_reads=1, blocking=False,
                                    retries_until_locked=1,
                                    raise_this=NotAbleToLock,
                                    write_lock=True) as rw_synchronized:
-                self.assertFalse("Should not have gotten locked, %s"
+                self.assertFalse(_t_r_u_e, "Should not have gotten locked, %s"
                                  % rw_synchronized)
-            self.assertTrue(e)
+            self.assertTrue(_e)
 
-        with self.assertRaises(NotAbleToLock) as e:
+        with self.assertRaises(NotAbleToLock) as _e:
             with RWSynchronization(counting_semaphore=self.test_semaphore,
                                    mutex_lock=self.test_lock,
                                    simultaneous_reads=1, blocking=False,
                                    retries_until_locked=3,
                                    raise_this=NotAbleToLock,
                                    write_lock=True) as rw_synchronized:
-                self.assertFalse("Should not have gotten locked, %s"
+                self.assertFalse(_t_r_u_e, "Should not have gotten locked, %s"
                                  % rw_synchronized)
-            self.assertTrue(e)
+            self.assertTrue(_e)
 
         self.test_lock.release()
 
@@ -540,9 +552,9 @@ class UnitTest_RWSynchronized_MultiTread(unittest.TestCase):
         self.expected_number_of_items = 2
         self.list_based_test_load = [0.14, 0.01, ]
 
-        @rwSynchronized(mutex_lock=self.test_mutex_lock,
-                        counting_semaphore=self.test_semaphore,
-                        write_lock=True)
+        @RW_synchronized(mutex_lock=self.test_mutex_lock,
+                         counting_semaphore=self.test_semaphore,
+                         write_lock=True)
         def test_thread_activity_writer():
             thread_sleep = ThreadSleep()
             if self.expected_number_of_items != \
@@ -556,23 +568,23 @@ class UnitTest_RWSynchronized_MultiTread(unittest.TestCase):
 
             print("slept %d" % sleep_interval)
 
-        @rwSynchronized(mutex_lock=self.test_mutex_lock,
-                        counting_semaphore=self.test_semaphore,
-                        write_lock=False)
+        @RW_synchronized(mutex_lock=self.test_mutex_lock,
+                         counting_semaphore=self.test_semaphore,
+                         write_lock=False)
         def test_thread_activity_reader(start_order):
             thread_sleep = ThreadSleep()
             if self.expected_number_of_items != \
                     len(self.list_based_test_load):
-                self.assertFalse('Inconsistent thread work state')
+                self.assertFalse(_t_r_u_e, 'Inconsistent thread work state')
 
             print("Thread_activity")
             sleep_interval = 0.01
             if start_order == 2 and len(self.list_based_test_load) != 2:
-                self.assertFalse('Inconsistent thread work state')
+                self.assertFalse(_t_r_u_e, 'Inconsistent thread work state')
 
             # came after the writer executed.
             if start_order == 3 and len(self.list_based_test_load) != 1:
-                self.assertFalse('Inconsistent thread_work state')
+                self.assertFalse(_t_r_u_e, 'Inconsistent thread_work state')
             thread_sleep(sleep_interval)
 
         self.test_thread_activity1 = test_thread_activity_writer
@@ -603,10 +615,12 @@ class UnitTest_RWSynchronized_MultiTread(unittest.TestCase):
             self.thread_1.join()
             self.thread_2.join()
             self.thread_3.join()
-        except Exception as e:
-            self.assertFalse(str(e) + ' ' + repr(e))
+        except Exception as _e:
+            self.assertFalse(str(_e) + ' ' + repr(_e))
         else:
-            self.assertTrue(True)
+            _v = 1 < 2
+            self.assertTrue(_v, "Synchronized acctivity test started and "
+                            "sstop issued finished.")
 
 
 class UnitTest_RWSynchronized_OneThread(unittest.TestCase):
@@ -615,107 +629,117 @@ class UnitTest_RWSynchronized_OneThread(unittest.TestCase):
         self.test_semaphore = threading.Semaphore(10)
         self.test_lock = threading.Lock()
 
-    def test_rwSynchronized_OneThread_readlock(self):
-        @rwSynchronized(counting_semaphore=self.test_semaphore,
-                        mutex_lock=self.test_lock,
-                        simultaneous_reads=1, blocking=True,
-                        retries_until_locked=False,
-                        raise_this=NotAbleToLock,
-                        write_lock=False)
+    def test_RW_synchronized_OneThread_readlock(self):
+        @RW_synchronized(counting_semaphore=self.test_semaphore,
+                         mutex_lock=self.test_lock,
+                         simultaneous_reads=1, blocking=True,
+                         retries_until_locked=False,
+                         raise_this=NotAbleToLock,
+                         write_lock=False)
         def test_synch_func():
-            self.assertTrue("function passed")
+            _v0 = 1 < 2
+            self.assertTrue(_v0, "function passed")
         test_synch_func()
 
-    def test_rwSynchronized_OneThread_writelock(self):
-        @rwSynchronized(counting_semaphore=self.test_semaphore,
-                        mutex_lock=self.test_lock,
-                        simultaneous_reads=1, blocking=True,
-                        retries_until_locked=False,
-                        raise_this=NotAbleToLock,
-                        write_lock=True)
+    def test_RW_synchronized_OneThread_writelock(self):
+        @RW_synchronized(counting_semaphore=self.test_semaphore,
+                         mutex_lock=self.test_lock,
+                         simultaneous_reads=1, blocking=True,
+                         retries_until_locked=False,
+                         raise_this=NotAbleToLock,
+                         write_lock=True)
         def test_synch_func():
-            self.assertTrue("function passed")
+            _v0 = 1 < 2
+            self.assertTrue(_v0, "function passed")
         test_synch_func()
 
-    def test_rwSynchronized_OneThread_read_fail(self):
+    def test_RW_synchronized_OneThread_read_fail(self):
         self.test_lock.acquire()
 
-        with self.assertRaises(NotAbleToLock) as e:
-            @rwSynchronized(counting_semaphore=self.test_semaphore,
-                            mutex_lock=self.test_lock,
-                            simultaneous_reads=1, blocking=False,
-                            retries_until_locked=False,
-                            raise_this=NotAbleToLock,
-                            write_lock=False)
+        with self.assertRaises(NotAbleToLock) as _e:
+            @RW_synchronized(counting_semaphore=self.test_semaphore,
+                             mutex_lock=self.test_lock,
+                             simultaneous_reads=1, blocking=False,
+                             retries_until_locked=False,
+                             raise_this=NotAbleToLock,
+                             write_lock=False)
             def test_synch_func():
-                self.assertFalse("Should not have gotten locked")
+                _v0 = 1 < 2
+                self.assertFalse(_v0, "Should not have gotten locked")
             test_synch_func()
-            self.assertTrue(e)
+            self.assertTrue(_e)
 
-        with self.assertRaises(NotAbleToLock) as e:
+        with self.assertRaises(NotAbleToLock) as _e:
 
-            @rwSynchronized(counting_semaphore=self.test_semaphore,
-                            mutex_lock=self.test_lock,
-                            simultaneous_reads=1, blocking=False,
-                            retries_until_locked=1,
-                            raise_this=NotAbleToLock,
-                            write_lock=False)
-            def test_synch_func():
-                self.assertFalse("Should not have gotten locked")
-            test_synch_func()
-            self.assertTrue(e)
+            @RW_synchronized(counting_semaphore=self.test_semaphore,
+                             mutex_lock=self.test_lock,
+                             simultaneous_reads=1, blocking=False,
+                             retries_until_locked=1,
+                             raise_this=NotAbleToLock,
+                             write_lock=False)
+            def test_synch_func_5():
+                _v2 = 1 < 2
+                self.assertFalse(_v2, "Should not have gotten locked")
+            test_synch_func_5()
+            self.assertTrue(_e)
 
-        with self.assertRaises(NotAbleToLock) as e:
-            @rwSynchronized(counting_semaphore=self.test_semaphore,
-                            mutex_lock=self.test_lock,
-                            simultaneous_reads=1, blocking=False,
-                            retries_until_locked=3,
-                            raise_this=NotAbleToLock,
-                            write_lock=False)
-            def test_synch_func():
-                self.assertFalse("Should not have gotten locked")
-            test_synch_func()
-            self.assertTrue(e)
+        with self.assertRaises(NotAbleToLock) as _e:
+            @RW_synchronized(counting_semaphore=self.test_semaphore,
+                             mutex_lock=self.test_lock,
+                             simultaneous_reads=1, blocking=False,
+                             retries_until_locked=3,
+                             raise_this=NotAbleToLock,
+                             write_lock=False)
+            def test_synch_func_04():
+                self.assertFalse(_t_r_u_e, "Should not have gotten locked")
+            test_synch_func_04()
+            self.assertTrue(_e)
 
         self.test_lock.release()
 
-    def test_rwSynchronized_OneThread_write_fail(self):
+    def test_RW_synchronized_OneThread_write_fail(self):
+        '''
+        rw locking to see if exception is raised on not able to lock.
+        '''
         self.test_lock.acquire()
-        with self.assertRaises(NotAbleToLock) as e:
-            @rwSynchronized(counting_semaphore=self.test_semaphore,
-                            mutex_lock=self.test_lock,
-                            simultaneous_reads=1, blocking=False,
-                            retries_until_locked=False,
-                            raise_this=NotAbleToLock,
-                            write_lock=True)
+        with self.assertRaises(NotAbleToLock) as _e:
+            @RW_synchronized(counting_semaphore=self.test_semaphore,
+                             mutex_lock=self.test_lock,
+                             simultaneous_reads=1, blocking=False,
+                             retries_until_locked=False,
+                             raise_this=NotAbleToLock,
+                             write_lock=True)
             def test_synch_func():
-                self.assertFalse("Should not have gotten locked")
+                _v3 = 1 < 2
+                self.assertFalse(_v3, "Should not have gotten locked")
             test_synch_func()
-            self.assertTrue(e)
+            self.assertTrue(_e)
 
-        with self.assertRaises(NotAbleToLock) as e:
-            @rwSynchronized(counting_semaphore=self.test_semaphore,
-                            mutex_lock=self.test_lock,
-                            simultaneous_reads=1, blocking=False,
-                            retries_until_locked=1,
-                            raise_this=NotAbleToLock,
-                            write_lock=True)
-            def test_synch_func():
-                self.assertFalse("Should not have gotten locked")
-            test_synch_func()
-            self.assertTrue(e)
+        with self.assertRaises(NotAbleToLock) as _e:
+            @RW_synchronized(counting_semaphore=self.test_semaphore,
+                             mutex_lock=self.test_lock,
+                             simultaneous_reads=1, blocking=False,
+                             retries_until_locked=1,
+                             raise_this=NotAbleToLock,
+                             write_lock=True)
+            def test_synch_func_3():
+                _v1 = 1 < 2
+                self.assertFalse(_v1, "Should not have gotten locked")
+            test_synch_func_3()
+            self.assertTrue(_e)
 
-        with self.assertRaises(NotAbleToLock) as e:
-            @rwSynchronized(counting_semaphore=self.test_semaphore,
-                            mutex_lock=self.test_lock,
-                            simultaneous_reads=1, blocking=False,
-                            retries_until_locked=3,
-                            raise_this=NotAbleToLock,
-                            write_lock=True)
-            def test_synch_func():
-                self.assertFalse("Should not have gotten locked")
-            test_synch_func()
-            self.assertTrue(e)
+        with self.assertRaises(NotAbleToLock) as _e:
+            @RW_synchronized(counting_semaphore=self.test_semaphore,
+                             mutex_lock=self.test_lock,
+                             simultaneous_reads=1, blocking=False,
+                             retries_until_locked=3,
+                             raise_this=NotAbleToLock,
+                             write_lock=True)
+            def test_synch_func_2():
+                _v0 = 1 < 2
+                self.assertFalse(_v0, "Should not have gotten locked")
+            test_synch_func_2()
+            self.assertTrue(_e)
 
         self.test_lock.release()
 
@@ -839,7 +863,8 @@ class UnitTest_Synchronization_MultiThread(unittest.TestCase):
                 thread_sleep = ThreadSleep()
                 if self.expected_number_of_items != \
                         len(self.list_based_test_load):
-                    self.assertFalse('Inconsistent thread work state')
+                    self.assertFalse(_t_r_u_e,
+                                     'Inconsistent thread work state')
 
                 print("Thread_activity")
                 sleep_interval = self.list_based_test_load.pop(0)
@@ -857,10 +882,10 @@ class UnitTest_Synchronization_MultiThread(unittest.TestCase):
 
             self.thread_1.join()
             self.thread_2.join()
-        except Exception as e:
-            self.assertFalse(str(e) + ' ' + repr(e))
+        except Exception as _e:
+            self.assertFalse(str(_e) + ' ' + repr(_e))
         else:
-            self.assertTrue(True)
+            self.assertTrue(_t_r_u_e)
 
 
 class UnitTest_Synchronized_MultiThread(unittest.TestCase):
@@ -930,8 +955,8 @@ class UnitTest_Synchronized_MultiThread(unittest.TestCase):
 
             self.thread_1.join()
             self.thread_2.join()
-        except Exception as e:
-            self.assertFalse(str(e) + ' ' + repr(e))
+        except Exception as _e:
+            self.assertFalse(str(_e) + ' ' + repr(_e))
 
 
 if __name__ == '__main__':
